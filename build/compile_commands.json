@@ -1,0 +1,8 @@
+[
+{
+  "directory": "/Users/yoshidakota/Applications/mini_fuzzer/build",
+  "command": "/Library/Developer/CommandLineTools/usr/bin/c++   -std=gnu++20 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX14.0.sdk -o CMakeFiles/test1.dir/tests/test1.cpp.o -c /Users/yoshidakota/Applications/mini_fuzzer/tests/test1.cpp",
+  "file": "/Users/yoshidakota/Applications/mini_fuzzer/tests/test1.cpp",
+  "output": "CMakeFiles/test1.dir/tests/test1.cpp.o"
+}
+]
