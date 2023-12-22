@@ -1,12 +1,21 @@
-import multiprocessing
 import random
 import string
 import subprocess
 import sys
-from multiprocessing import Process, Value
+import threading
+import time
 
 sys.path.append("../mini_fuzzer/monitor.py")
-from monitor import Monitor, display_run_time
+from monitor import display_status
+
+### global variables ###
+start_time: float = 0
+last_crash_time: float = 0
+cycles_done: int = 0
+uniqu_crash: int = 0
+line_coverage: int = 0
+exec_speed: float = 0
+lock: threading.Lock = threading.Lock()
 
 
 class Fuzzer:
@@ -40,50 +49,60 @@ class Fuzzer:
         f.close()
 
 
-def main():
-    target = sys.argv[1]
-    monitor = Monitor()
-    fuzzer = Fuzzer(target)
-
-    start_time = Value("f", monitor.start_time)
-    last_crash_time = Value("f", monitor.last_crash_time)
-    cycles_done = Value("i", monitor.cycles_done)
-    uniqu_crash = Value("i", monitor.uniqu_crash)
-    line_coverage = Value("i", monitor.line_coverage)
-    exec_speed = Value("f", monitor.exec_speed)
-
-    stop_event = multiprocessing.Event()
-
-    process = Process(
-        target=display_run_time,
-        args=(
-            stop_event,
+def display_run_time(stop_event) -> None:
+    if not stop_event.is_set():
+        display_status(
             start_time,
             last_crash_time,
             cycles_done,
             uniqu_crash,
             line_coverage,
             exec_speed,
-        ),
-    )
-    process.start()
+        )
+        threading.Timer(1, display_run_time, [stop_event]).start()
+
+
+def main():
+    global start_time
+    global last_crash_time
+    global cycles_done
+    global uniqu_crash
+    global line_coverage
+    global exec_speed
+
+    target = sys.argv[1]
+    fuzzer = Fuzzer(target)
+
+    start_time = time.time()
+
+    stop_event = threading.Event()
+    display_run_time(stop_event)
 
     try:
-        while monitor.cycles_done < 100:
+        while True:
             fuzz = fuzzer.generate_fuzz()
-            monitor.cycles_done += 1
+            lock.acquire()
+            cycles_done += 1
+            lock.release()
             status = fuzzer.do_fuzzing(fuzz)
             if status > 0:
-                monitor.uniqu_crash += 1
+                lock.acquire()
+                uniqu_crash += 1
+                lock.release()
+
+                display_status(
+                    start_time,
+                    last_crash_time,
+                    cycles_done,
+                    uniqu_crash,
+                    line_coverage,
+                    exec_speed,
+                )
+
                 fuzzer.dump(fuzz, status)
-        #    sys.stdout.write(
-        #        "\r fuzz: %d, crashs: %d" % (monitor.cycles_done, monitor.uniqu_crash)
-        #    )
-        #    sys.stdout.flush()
-        #  sys.stdout.write("\n")
     except KeyboardInterrupt:
+        print("\033[10B\n")
         stop_event.set()
-        process.join()
 
 
 if __name__ == "__main__":
