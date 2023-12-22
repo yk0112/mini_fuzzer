@@ -1,7 +1,12 @@
+import multiprocessing
 import random
 import string
 import subprocess
 import sys
+from multiprocessing import Process, Value
+
+sys.path.append("../mini_fuzzer/monitor.py")
+from monitor import Monitor, display_run_time
 
 
 class Fuzzer:
@@ -37,21 +42,48 @@ class Fuzzer:
 
 def main():
     target = sys.argv[1]
+    monitor = Monitor()
     fuzzer = Fuzzer(target)
 
-    fuzz_count = 0
-    crashs = 0
-    while fuzz_count < 100:
-        fuzz = fuzzer.generate_fuzz()
-        fuzz_count += 1
-        status = fuzzer.do_fuzzing(fuzz)
-        if status > 0:
-            crashs += 1
-            fuzzer.dump(fuzz, status)
+    start_time = Value("f", monitor.start_time)
+    last_crash_time = Value("f", monitor.last_crash_time)
+    cycles_done = Value("i", monitor.cycles_done)
+    uniqu_crash = Value("i", monitor.uniqu_crash)
+    line_coverage = Value("i", monitor.line_coverage)
+    exec_speed = Value("f", monitor.exec_speed)
 
-        sys.stdout.write("\r fuzz: %d, crashs: %d" % (fuzz_count, crashs))
-        sys.stdout.flush()
-    sys.stdout.write("\n")
+    stop_event = multiprocessing.Event()
+
+    process = Process(
+        target=display_run_time,
+        args=(
+            stop_event,
+            start_time,
+            last_crash_time,
+            cycles_done,
+            uniqu_crash,
+            line_coverage,
+            exec_speed,
+        ),
+    )
+    process.start()
+
+    try:
+        while monitor.cycles_done < 100:
+            fuzz = fuzzer.generate_fuzz()
+            monitor.cycles_done += 1
+            status = fuzzer.do_fuzzing(fuzz)
+            if status > 0:
+                monitor.uniqu_crash += 1
+                fuzzer.dump(fuzz, status)
+        #    sys.stdout.write(
+        #        "\r fuzz: %d, crashs: %d" % (monitor.cycles_done, monitor.uniqu_crash)
+        #    )
+        #    sys.stdout.flush()
+        #  sys.stdout.write("\n")
+    except KeyboardInterrupt:
+        stop_event.set()
+        process.join()
 
 
 if __name__ == "__main__":
