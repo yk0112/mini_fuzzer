@@ -1,105 +1,106 @@
+import ast
+import queue
 import random
-import string
 import subprocess
 import sys
 import threading
 import time
+from typing import List
 
+sys.path.append("../mini_fuzzer/mutation.py")
 sys.path.append("../mini_fuzzer/monitor.py")
-from monitor import display_status
 
-### global variables ###
-start_time: float = 0
-last_crash_time: float = 0
-cycles_done: int = 0
-uniqu_crash: int = 0
-line_coverage: int = 0
-exec_speed: float = 0
+from monitor import Monitor
+from mutation import bitflip
+
 lock: threading.Lock = threading.Lock()
 
 
 class Fuzzer:
     target: str
-    base: str
+    seeds: queue.Queue[List[str]]
+    testing_seed: List[str]
     rand: random.SystemRandom
 
-    def __init__(self, target: str) -> None:
+    def __init__(self, target: str, seeds: queue.Queue) -> None:
         self.target = target
-        self.base = string.ascii_letters + string.digits
+        self.seeds = seeds
         self.rand = random.SystemRandom()
 
-    def generate_fuzz(self) -> str:
-        fuzz_length = self.rand.randint(1, 64)
-        fuzz = random.choices(self.base, k=fuzz_length)
-        fuzz = "".join(fuzz)
-        return fuzz
-
-    def do_fuzzing(self, fuzz: str) -> int:
-        command = " ".join([self.target, fuzz])
+    def do_fuzzing(self) -> int:
+        seed = self.seeds.get()
+        self.testing_seed = seed
+        seed.insert(0, self.target)
+        command = " ".join(seed)
         child_process = subprocess.run(
             command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True
         )
+        
         status = child_process.returncode
         return status
+    
+    def mutation(self, s:str)->str:
+        mutators = [
+            bitflip
+        ]
+        mutator = random.choice(mutators)
+        return mutator(s)
+    
+    def generate_fuzz(self) -> None:
+        mutated_seed = []
+        for s in self.testing_seed:
+            mutated_seed.append(self.mutation(s))
+        self.seeds.put(mutated_seed)
 
-    def dump(self, fuzz: str, status: int):
-        fuzz_and_status = str(status) + "," + fuzz + "\n"
+
+    def dump(self, status: int) -> None:
+        fuzz_and_status = str(status) + "," + " ".join(self.testing_seed) + "\n"
         f = open("dump.csv", "a")
         f.write(fuzz_and_status)
         f.close()
 
 
-def display_run_time(stop_event) -> None:
-    if not stop_event.is_set():
-        display_status(
-            start_time,
-            last_crash_time,
-            cycles_done,
-            uniqu_crash,
-            line_coverage,
-            exec_speed,
-        )
-        threading.Timer(1, display_run_time, [stop_event]).start()
+def display_run_time(stop_event, monitor) -> None:
+    while not stop_event.is_set():
+        monitor.display()
+        time.sleep(1)
+
 
 
 def main():
-    global start_time
-    global last_crash_time
-    global cycles_done
-    global uniqu_crash
-    global line_coverage
-    global exec_speed
-
     target = sys.argv[1]
-    fuzzer = Fuzzer(target)
+    seed_file = sys.argv[2]
+    
+    my_queue = queue.Queue()    
+    
+    with open(seed_file, 'r') as file:
+        for line in file:
+            list = ast.literal_eval(line.strip())
+            my_queue.put(list)
 
-    start_time = time.time()
-
+    fuzzer = Fuzzer(target, my_queue)
+    monitor = Monitor()
+    
     stop_event = threading.Event()
-    display_run_time(stop_event)
+    thread = threading.Thread(target=display_run_time, args=(stop_event, monitor))
+    thread.start()
 
     try:
-        while True:
-            fuzz = fuzzer.generate_fuzz()
+        while not fuzzer.seeds.empty():
             lock.acquire()
-            cycles_done += 1
+            monitor.cycles_done += 1
             lock.release()
-            status = fuzzer.do_fuzzing(fuzz)
+            status = fuzzer.do_fuzzing()
             if status > 0:
                 lock.acquire()
-                uniqu_crash += 1
+                monitor.uniqu_crash += 1
+                monitor.last_crash_time = time.time()
                 lock.release()
+                monitor.display()
 
-                display_status(
-                    start_time,
-                    last_crash_time,
-                    cycles_done,
-                    uniqu_crash,
-                    line_coverage,
-                    exec_speed,
-                )
-
-                fuzzer.dump(fuzz, status)
+                if True:  # for test
+                   fuzzer.generate_fuzz()
+                fuzzer.dump(status)
     except KeyboardInterrupt:
         print("\033[10B\n")
         stop_event.set()
