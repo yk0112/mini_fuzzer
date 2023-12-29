@@ -1,4 +1,8 @@
 
+# executable file  directory 
+EX_DIRECTORY = '../build'
+
+
 # for arithmetic inc or dec in mutation
 INCREMENT_VALUE = 30
 DECREMENT_VALUE = 30
