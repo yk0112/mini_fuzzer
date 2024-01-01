@@ -15,13 +15,12 @@ def find_files(directory: str, pattern: str) -> list[str]:
     return matches
 
 
-def get_line_coverage() -> dict[str, list[str]]:
-    coverage = {}
+def prepare_get_coverage() -> None:
     gcda_files = find_files(EX_DIRECTORY, "*.gcda")
 
     if not gcda_files:
-        print("no gcda files")
-        return coverage
+        print("no gcda file")
+        sys.exit(1)
 
     for file in gcda_files:
         command = "gcov " + file
@@ -33,23 +32,75 @@ def get_line_coverage() -> dict[str, list[str]]:
             sys.exit(1)
 
     gcov_files = find_files(EX_DIRECTORY, "*.cpp.gcov")
+    
+    if not gcov_files:
+        print("no gcov file")
+        sys.exit(1)
+
+
+
+def get_total_line() -> dict[str, int]:
+    result = {}
+    gcov_files = find_files(EX_DIRECTORY, "*.cpp.gcov")
 
     for gcov_file in gcov_files:
         with open(gcov_file, "r") as file:
-            all_line = 0
-            line_coverage: list[int] = []
+            line_count = 0
+            source_file = ""
+            for line in file:
+                parts = line.split(":")
+                line_number = int(parts[1].strip())
+                if line_number == 0:
+                    if parts[2] == "Source":
+                        source_file = parts[3].strip()
+                else:
+                    line_count += 1
+            result[source_file] = line_count
+    return result
+
+
+def get_executed_line() -> dict[str, int]:
+    result = {}
+    gcov_files = find_files(EX_DIRECTORY, "*.cpp.gcov")
+   
+    for gcov_file in gcov_files:
+        with open(gcov_file, "r") as file:
+            executed_line = 0
+            source_file = ""
             for line in file:
                 parts = line.split(":")
                 executed_count = parts[0].strip()
                 line_number = int(parts[1].strip())
+                if line_number == 0 and parts[2] == "Source":
+                    source_file = parts[3].strip()
+                if line_number > 0 and executed_count != "#####":
+                    executed_line += 1
+            result[source_file] = executed_line
+    return result
 
-                if line_number > 0:
-                    all_line += 1
-                    if executed_count != "#####":
-                        print(line_number)
-                        line_coverage.append(line_number)
-            coverage[gcov_file] = line_coverage
-    return coverage
+
+
+def calculate_coverage(total_line : dict[str,int], 
+                       executed_line : dict[str,int]) -> float:
+    total = 0
+    executed = 0
+
+    for file in total_line.keys():
+        total += total_line[file]
+        executed += executed_line[file]
+    if total == 0:
+        return 12.0
+    return (executed / total) * 100
+
+
+
+def calculate_coverage_perFile(total_line : dict[str,int], 
+                               executed_line : dict[str,int]) -> dict[str,float]:
+    persent = {}
+
+    for file in total_line.keys():
+        persent[file] = (executed_line[file] / total_line[file]) * 100
+    return persent 
 
 
 # delete coverage info for next fuzzing
