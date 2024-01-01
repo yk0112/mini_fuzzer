@@ -9,10 +9,12 @@ from itertools import product
 
 sys.path.append("../mini_fuzzer/mutation.py")
 sys.path.append("../mini_fuzzer/monitor.py")
-sys.path.append("..mini_fuzzer/coverage.py")
+sys.path.append("../mini_fuzzer/coverage.py")
+sys.path.append("../mini_fuzzer/config.py")
 
 import coverage
 import mutation
+from config import SKIP_ARGS
 from monitor import Monitor
 
 lock: threading.Lock = threading.Lock()
@@ -22,17 +24,18 @@ class Fuzzer:
     target: str
     seeds: queue.Queue[list[str]]
     testing_seed: list[str]
-    total_line: dict[str,int]
-    executed_line: dict[str, int]
-    before_executed_line : dict[str, int]
+    total_line: int
+    executed_line: int
+    before_executed_line : int
     isReady : bool
     rand: random.SystemRandom
 
     def __init__(self, target: str, seeds: queue.Queue) -> None:
         self.target = target
         self.seeds = seeds
-        self.executed_line = {}
-        self.before_executed_line = {"aaa" : 12}
+        self.total_line = 0
+        self.executed_line = 0
+        self.before_executed_line = 0
         self.isReady = False
         self.rand = random.SystemRandom()
         
@@ -55,7 +58,7 @@ class Fuzzer:
             self.total_line = coverage.get_total_line()
             self.isReady = True
 
-        self.before_executed_line = self.executed_line.copy()
+        self.before_executed_line = self.executed_line
         self.executed_line = coverage.get_executed_line()
         
         status = child_process.returncode
@@ -69,19 +72,22 @@ class Fuzzer:
                     mutation.delete_random_character]
 
         for mutator_combination in product(mutators, repeat=len(seed)):
-            result = [func(elem) for func, elem in zip(mutator_combination, seed)]
-            self.seeds.put(result)
+            mutated = []
+            index = 0
+            for func, elem in zip(mutator_combination, seed):
+                if index in SKIP_ARGS:
+                    mutated.append(elem)
+                else:
+                    mutated.append(func(elem))
+                index += 1
+            self.seeds.put(mutated)
+
     
     def is_good_testcase(self) -> bool:
-        is_good = False
-    
-        if not self.before_executed_line:
+        if self.executed_line > self.before_executed_line:
             return True
-
-        for file in self.before_executed_line.keys():
-            if self.before_executed_line[file] < self.executed_line[file]:
-                is_good = True
-        return is_good
+        else:
+            return False
 
     def dump(self, status: int) -> None:
         fuzz_and_status = str(status) + "," + " ".join(self.testing_seed) + "\n"
@@ -129,8 +135,8 @@ def main():
                 monitor.change_crashes()
                 lock.release()
                 fuzzer.dump(status)
-                         
-            if  True: # fuzzer.is_good_testcase():
+            
+            if  True:    #fuzzer.is_good_testcase():
                 lock.acquire()
                 monitor.change_coverage(fuzzer.total_line, fuzzer.executed_line)
                 lock.release()

@@ -2,6 +2,8 @@
 # executable file  directory 
 EX_DIRECTORY = '../build'
 
+# list of arguments that will not be mutated
+SKIP_ARGS = [0]
 
 # for arithmetic inc or dec in mutation
 INCREMENT_VALUE = 30
