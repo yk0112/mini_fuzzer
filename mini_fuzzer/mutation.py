@@ -1,4 +1,5 @@
 import random
+import re
 import string
 import sys
 
@@ -39,7 +40,7 @@ def byteflip(s:str) -> str:
 # Increase by a constant value
 def arithmetic_inc(s: str) -> str:
     num = 0
-    if s.isdigit():
+    if re.match("^-?\\d+$", s):
        num = int(s)
     else:
         try:
@@ -52,7 +53,7 @@ def arithmetic_inc(s: str) -> str:
  # Decrease by a constant value
 def arithmetic_dec(s: str) -> str:
     num = 0
-    if s.isdigit():
+    if re.match("^-?\\d+$", s):
        num = int(s)
     else:
         try:
@@ -80,5 +81,32 @@ def delete_random_character(s: str) -> str:
         return s
     delete_pos = random.randint(0, len(s) - 1)
     return s[:delete_pos] + s[delete_pos + 1:]
+
+
+def change_arguments_number(args : list[str]) -> list[str]:
+    select = random.randint(0, 2)
+    if not args:
+        select = 2
+
+    if select == 0: #no change
+        return args
+    
+    elif select == 1:   #delete
+        delete_pos = random.randint(0, len(args) - 1)
+        args.pop(delete_pos)
+        return args
+     
+    else:   #add
+        insert_pos = random.randint(0, len(args))
+        length = random.randint(1,10)
+        new_arg = random.choices(string.printable, k=length)
+        new_arg = ''.join(new_arg)
+        args.insert(insert_pos, new_arg)
+        return args
+
+
+
+
+
 
 

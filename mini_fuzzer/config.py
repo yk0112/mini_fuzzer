@@ -1,9 +1,14 @@
 
-# executable file  directory 
-EX_DIRECTORY = '../build'
+EX_DIRECTORY = '../../ugrep/src'
+
+# directory where gcov files are generated
+GCOV_DIRECTORY = 'gcov'
+
+# setting the target program timeout
+TIMEOUT = 5
 
 # list of arguments that will not be mutated
-SKIP_ARGS = [0]
+SKIP_ARGS = []
 
 # for arithmetic inc or dec in mutation
 INCREMENT_VALUE = 30

@@ -1,4 +1,5 @@
 import ast
+import os
 import queue
 import random
 import subprocess
@@ -14,7 +15,7 @@ sys.path.append("../mini_fuzzer/config.py")
 
 import coverage
 import mutation
-from config import SKIP_ARGS
+from config import SKIP_ARGS, TIMEOUT
 from monitor import Monitor
 
 lock: threading.Lock = threading.Lock()
@@ -42,35 +43,37 @@ class Fuzzer:
     def do_fuzzing(self) -> int:
         seed = self.seeds.get()
         self.testing_seed = seed[:]
-        args = []
-        for s in seed:
-            arg = "'" + s + "'"
-            args.append(arg)
+        command = [self.target] + seed
+       
+        status = 0
 
-        args.insert(0, self.target)
-        command = " ".join(args)
-        child_process = subprocess.run(
-            command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True
-        )
+        try:
+            child_process = subprocess.run(
+                command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False, timeout=TIMEOUT
+            )
+            status = child_process.returncode
+        except Exception as e:
+            self.dump(type(e).__name__) 
         
         if not self.isReady:
             coverage.prepare_get_coverage()
-            self.total_line = coverage.get_total_line()
+            self.total_line = coverage.get_excutable_line()
             self.isReady = True
 
         self.before_executed_line = self.executed_line
         self.executed_line = coverage.get_executed_line()
         
-        status = child_process.returncode
         return status
     
     def mutation_fuzz(self) -> None:
-        seed = self.testing_seed[:]
+        seed = mutation.change_arguments_number(self.testing_seed[:])
         
         mutators = [mutation.bitflip, mutation.byteflip, mutation.arithmetic_inc, 
                     mutation.arithmetic_dec, mutation.add_random_character, mutation.add_interesting_value,
                     mutation.delete_random_character]
-
+       
+       #  mutators = [mutation.add_random_character]
+        
         for mutator_combination in product(mutators, repeat=len(seed)):
             mutated = []
             index = 0
@@ -80,7 +83,8 @@ class Fuzzer:
                 else:
                     mutated.append(func(elem))
                 index += 1
-            self.seeds.put(mutated)
+            if self.testing_seed != mutated:
+                self.seeds.put(mutated)
 
     
     def is_good_testcase(self) -> bool:
@@ -89,11 +93,11 @@ class Fuzzer:
         else:
             return False
 
-    def dump(self, status: int) -> None:
-        fuzz_and_status = str(status) + "," + " ".join(self.testing_seed) + "\n"
-        f = open("dump.csv", "a")
-        f.write(fuzz_and_status)
-        f.close()
+    def dump(self, status: str) -> None:
+        fuzz_and_status = status + "," + " ".join(self.testing_seed) + "\n"
+        with open("dump.csv", "a") as f:
+            f.write(fuzz_and_status)
+
 
 
 def display_run_time(stop_event, monitor) -> None:
@@ -123,25 +127,25 @@ def main():
         target=display_run_time, args=(stop_event, monitor), daemon=True
     )
     thread.start()
-
+    
     try:
         while not fuzzer.seeds.empty():
             lock.acquire()
             monitor.change_cycles()
             lock.release()
             status = fuzzer.do_fuzzing()
-            if status > 0:
+            if status > 128:
                 lock.acquire()
                 monitor.change_crashes()
                 lock.release()
-                fuzzer.dump(status)
+                fuzzer.dump(str(status))
             
-            if  True:    #fuzzer.is_good_testcase():
+            if  fuzzer.is_good_testcase():
                 lock.acquire()
                 monitor.change_coverage(fuzzer.total_line, fuzzer.executed_line)
                 lock.release()
                 fuzzer.mutation_fuzz()
-            
+        
             lock.acquire()
             monitor.change_exec_speed()
             lock.release()
