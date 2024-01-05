@@ -7,7 +7,7 @@ set(CMAKE_CXX_OUTPUT_EXTENSION_REPLACE 1)
 
 
 #### test ####
-add_executable(test1 ./tests/test1.cpp)
-add_executable(test2 ./tests/test2.cpp)
-add_executable(test3 ./tests/test3.cpp)
+add_executable(test1 ./examples/test1.cpp)
+add_executable(test2 ./examples/test2.cpp)
+add_executable(test3 ./examples/test3.cpp)
 
