@@ -1,7 +1,6 @@
-# mini_fuzzer
 
-mini fuzzer is a mutation-based fuzzing tool aimed at command line tools.  
-By measuring the line coverage of the target program, effective test cases can be generated.  
+# mini fuzzer
+mini fuzzer is a mutation-based fuzzing tool aimed at command line tools. By measuring the line coverage of the target program, effective test cases can be generated.
 mini fuzz currently supports software written in C/C++ language.
 
 # Features
@@ -65,3 +64,5 @@ $ python fuzz.py <Path to the executable file to be tested>　 <path to seed fil
 - gcov (gcov is a code coverage analysis tool provided as part of GCC)
 - Colorama (Python library)
 
+# License
+mini fuzzer is licensed under the [MIT license](https://github.com/yk0112/mini_fuzzer/blob/main/LICENSE).
